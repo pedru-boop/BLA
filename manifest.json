@@ -1,0 +1,15 @@
+{
+  "name": "แดชบอร์ดผลงาน - ป้าเป็ด CFP®",
+  "short_name": "ป้าเป็ด CFP®",
+  "description": "แดชบอร์ดผลงานผู้บริหารหน่วย ศศธร รุจิเรกานุสรณ์ กรุงเทพประกันชีวิต สาขาเชียงใหม่",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EFF8FD",
+  "theme_color": "#0B3B63",
+  "icons": [
+    { "src": "icon.jpg", "sizes": "480x480", "type": "image/jpeg", "purpose": "any" },
+    { "src": "icon.jpg", "sizes": "480x480", "type": "image/jpeg", "purpose": "maskable" }
+  ]
+}
