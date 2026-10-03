@@ -6,7 +6,6 @@
 <title>แดชบอร์ดผลงาน · ป้าเป็ด CFP® — กรุงเทพประกันชีวิต</title>
 <meta name="description" content="แดชบอร์ดผลงานผู้บริหารหน่วย ศศธร รุจิเรกานุสรณ์ (ป้าเป็ด CFP®) กรุงเทพประกันชีวิต สาขาเชียงใหม่" />
 
-<!-- Home screen / PWA icon -->
 <link rel="icon" type="image/jpeg" href="icon.jpg" />
 <link rel="apple-touch-icon" href="icon.jpg" />
 <link rel="apple-touch-icon" sizes="180x180" href="icon.jpg" />
@@ -16,12 +15,10 @@
 <meta name="apple-mobile-web-app-title" content="ป้าเป็ด CFP®" />
 <meta name="theme-color" content="#0B3B63" />
 
-<!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
-<!-- React + Recharts (UMD builds, for a single deployable HTML file — no build step needed) -->
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
@@ -51,8 +48,8 @@ const AVATAR_URI = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDB
 
 /* ======================= APP VERSION ======================= */
 // อัปเดตเลขนี้ทุกครั้งที่ปรับแดชบอร์ด แล้วเทียบกับไฟล์เก่าได้ว่าอันไหนใหม่กว่า
-const APP_VERSION = "1.5.0";
-const BUILD_DATE = "17 ส.ค. 2569";
+const APP_VERSION = "1.6.0";
+const BUILD_DATE = "3 ต.ค. 2569";
 
 /* ======================= COLOR TOKENS (BLA: navy / sky blue / soft green) ======================= */
 const C = {
@@ -88,8 +85,9 @@ const YEARS = {
     [32227.70,4,460830,127633,89.57,17423164.41,66068.11,21162.15,11065.55,60005.71,6062.4],
     [24467.15,5,998981,14338,43.92,17518090.06,51586.54,2872.30,21594.85,44733.89,6852.65],
     [26847.97,1,1000000,34122,57.93,16438048.25,39578.30,13073.30,13774.67,32823.01,6755.29],
-    [16517.09,3,255555,98814,null,null,8229.67,14390.35,2126.74,null,null],
-    null,null,null,null
+    [31120.69,6,991283,146998,83.06,16206555.43,54051.18,19219.35,11901.34,47374.06,6677.12],
+    [53177.45,4,1700000,91638,212.81,16217442.07,49804.21,31558.10,21619.35,43677.71,6126.50],
+    null,null,null
   ]},
   2568: { position:"ผู้จัดการหน่วยชั้น 2", quota:17000, partial:false, m:[
     [26312.71,4,684016,68263,54.78,15873567.11,30805.46,12335.70,13977.01,null,null],
@@ -557,7 +555,7 @@ function App() {
               breakdown={<>สามัญ ฿{fmt(allTime.commOrd)} · LBDU ฿{fmt(allTime.commLbdu)}</>} />
           </div>
           <Note>
-            ปี {maxPremiumYear.yearFull} มีเบี้ยสูงสุด แต่เป็นข้อมูลถึงเดือนสิงหาคมเท่านั้น (ยังไม่ครบปี) —
+            ปี {maxPremiumYear.yearFull} มีเบี้ยสูงสุด แต่เป็นข้อมูลถึงเดือนกันยายนเท่านั้น (ยังไม่ครบปี) —
             ถ้านับเฉพาะปีที่ข้อมูลครบ 12 เดือน ปีที่เบี้ยสูงสุดคือ 2562 (฿{fmt(YEARS[2562] ? yearlyData.find(y=>y.yearFull===2562).premium : 0)})
           </Note>
 
@@ -752,7 +750,7 @@ function App() {
             </ResponsiveContainer>
           </div>
           <div style={{ fontSize:12, color:C.sub, textAlign:"center", marginTop:2, paddingBottom:8 }}>
-            แนวโน้ม AUM ตั้งแต่เริ่มต้นโครงการ (ม.ค. 2558) จนถึงล่าสุด (ก.ค. 2569) — {aumTimeline.length} เดือน
+            แนวโน้ม AUM ตั้งแต่เริ่มต้นโครงการ (ม.ค. 2558) จนถึงล่าสุด ({aumTimeline[aumTimeline.length-1].label}) — {aumTimeline.length} เดือน
           </div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
             <KpiCard tone="teal" label="AUM ล่าสุด" value={"฿"+fmtCompact(aumTimeline[aumTimeline.length-1].aum)} sub={aumTimeline[aumTimeline.length-1].label} />
@@ -889,7 +887,7 @@ function App() {
         </Card>
 
         <div style={{ textAlign:"center", fontSize:12, color:C.sub, padding:"6px 0 20px", lineHeight:1.7 }}>
-          ข้อมูลจากเอกสาร "เครดิตผลงานและผลประโยชน์ค่าตอบแทนผู้บริหารหน่วย" ปี 2558–2569 (ณ วันที่พิมพ์ 14/08/2569)<br/>
+          ข้อมูลจากเอกสาร "เครดิตผลงานและผลประโยชน์ค่าตอบแทนผู้บริหารหน่วย" ปี 2558–2569 (ณ วันที่พิมพ์ 03/10/2569)<br/>
           หมายเหตุ: ราย/ทุน/เบี้ย คือผลงานตัวแทนตรงของป้าเป็ด · เครดิตและค่าตอบแทนรวมเป็นตัวเลขระดับหน่วย · AUM มาจากธุรกิจกองทุนรวม แยกจากผลงานประกัน<br/>
           <span style={{ fontWeight:700, color:C.navy }}>เวอร์ชัน {APP_VERSION}</span> · อัปเดตล่าสุด {BUILD_DATE}
         </div>
