@@ -17,7 +17,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Mali:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -37,7 +37,7 @@
 </div>
 
 <script type="text/babel" data-presets="react">
-const { useState, useMemo, useEffect } = React;
+const { useState, useMemo, useRef, useEffect } = React;
 const {
   ComposedChart, LineChart, BarChart, Line, Bar, Area, AreaChart, LabelList,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine
@@ -48,11 +48,13 @@ const AVATAR_URI = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDB
 
 /* ======================= APP VERSION ======================= */
 // อัปเดตเลขนี้ทุกครั้งที่ปรับแดชบอร์ด แล้วเทียบกับไฟล์เก่าได้ว่าอันไหนใหม่กว่า
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "2.0.0";
 const BUILD_DATE = "3 ต.ค. 2569";
 
 /* ======================= COLOR TOKENS (BLA: navy / sky blue / soft green) ======================= */
-const C = {
+// LIGHT is also used, fixed, for the header banner and chart-tooltip bubbles (those stay the
+// same dark-navy-on-white-text style regardless of theme, like any floating popup/brand banner).
+const LIGHT = {
   navy: "#0B3B63",
   navyDeep: "#082A48",
   blue: "#2E8BC0",
@@ -68,6 +70,23 @@ const C = {
   ink: "#0B2338",
   sub: "#4C6580",
   red: "#D9534F",
+};
+const DARK = {
+  navy: "#BFE0F7",        // was the "heading on light card" text color -> now pale blue, readable on dark cards
+  navyDeep: "#061A2C",
+  blue: "#5AB4E8",
+  skyLight: "#1E3A52",    // was pale-blue panel bg -> now a dark-blue panel bg
+  skyPale: "#0B1826",     // page background
+  green: "#6FD39A",
+  greenLight: "#1E3B2C",
+  greenPale: "#15271D",
+  amber: "#F0B85C",
+  teal: "#4FC2B8",
+  tealPale: "#123330",
+  white: "#14263A",       // card surface (was pure white)
+  ink: "#E8F1FA",         // body text
+  sub: "#9FB8CC",
+  red: "#F2776F",
 };
 
 /* ======================= DATA ======================= */
@@ -319,67 +338,31 @@ YEAR_LIST.forEach(y => {
   });
 });
 
-/* ======================= UI ATOMS ======================= */
-function KpiCard({ label, value, sub, tone="blue", onClick, breakdown }) {
-  const bg = tone==="green" ? C.greenPale : tone==="navy" ? C.navy : tone==="teal" ? C.tealPale : C.skyPale;
-  const border = tone==="green" ? C.green : tone==="navy" ? C.navy : tone==="teal" ? C.teal : C.blue;
-  const text = tone==="navy" ? C.white : C.navy;
-  const subColor = tone==="navy" ? C.skyLight : C.sub;
-  return (
-    <div onClick={onClick} style={{
-      background: bg, borderRadius: 18, padding: "16px 18px",
-      border: `2px solid ${border}`, minWidth: 0, flex: "1 1 150px",
-      cursor: onClick ? "pointer" : "default"
-    }}>
-      <div style={{ fontSize: 21, fontWeight: 700, color: subColor, marginBottom: 6, whiteSpace:"nowrap" }}>{label}</div>
-      <div style={{ fontSize: 36, fontWeight: 800, color: text, lineHeight: 1.15, wordBreak:"break-word" }}>{value}</div>
-      {sub && <div style={{ fontSize: 19.5, fontWeight: 700, marginTop: 4, color: subColor }}>{sub}</div>}
-      {breakdown && (
-        <div style={{ fontSize: 18, fontWeight: 700, marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${tone==="navy"?"rgba(255,255,255,0.25)":C.skyLight}`, color: subColor, lineHeight: 1.7 }}>
-          {breakdown}
-        </div>
-      )}
-    </div>
-  );
-}
+// full chronological month list (every metric), used for "this month vs last month"
+const monthsFlat = [];
+YEAR_LIST.forEach(y => {
+  YEARS[y].m.forEach((row,i) => {
+    if (!row) return;
+    monthsFlat.push({
+      year: y, monthIdx: i, label: `${MONTHS[i]} ${y}`,
+      credit: row[0], policies: row[1], premium: row[3], commission: row[6],
+    });
+  });
+});
+const latestMonth = monthsFlat[monthsFlat.length-1];
+const prevMonth = monthsFlat.length>1 ? monthsFlat[monthsFlat.length-2] : null;
 
-function SectionTitle({ children, dot=C.blue }) {
-  return (
-    <div style={{ display:"flex", alignItems:"center", gap:10, margin:"6px 0 12px" }}>
-      <div style={{ width:10, height:10, borderRadius:99, background:dot, flexShrink:0 }} />
-      <h2 style={{ fontSize:28.5, fontWeight:800, color:C.navy, margin:0 }}>{children}</h2>
-    </div>
-  );
-}
-
-function Note({ children }) {
-  return (
-    <div style={{
-      fontSize:19, color:C.sub, background:C.skyPale, borderRadius:12,
-      padding:"9px 12px", marginTop:10, lineHeight:1.6, border:`1px dashed ${C.skyLight}`
-    }}>{children}</div>
-  );
-}
-
-function Card({ children, style }) {
-  return (
-    <div style={{
-      background: C.white, borderRadius: 22, padding: "18px 14px 8px",
-      boxShadow: "0 4px 18px rgba(11,59,99,0.08)", marginBottom: 20, ...style
-    }}>
-      {children}
-    </div>
-  );
-}
-
+/* ======================= UI ATOMS (fixed style, used for floating tooltip bubbles) ======================= */
+// Tooltips are small floating popups over the chart, so they keep one consistent dark-navy
+// look regardless of light/dark theme (same convention as native OS tooltips).
 const CustomTooltip = ({ active, payload, label, unit }) => {
   if (!active || !payload || !payload.length) return null;
   return (
     <div style={{
-      background: C.navy, color: C.white, borderRadius: 12, padding: "10px 14px",
-      fontSize: 19.5, boxShadow: "0 4px 14px rgba(0,0,0,0.25)", fontFamily: "'Noto Sans Thai', sans-serif"
+      background: LIGHT.navy, color: LIGHT.white, borderRadius: 12, padding: "10px 14px",
+      fontSize: 23.5, boxShadow: "0 4px 14px rgba(0,0,0,0.25)", fontFamily: "'Mali', cursive, sans-serif"
     }}>
-      <div style={{ fontWeight:800, marginBottom:4, color: C.skyLight }}>{label}</div>
+      <div style={{ fontWeight:800, marginBottom:4, color: LIGHT.skyLight }}>{label}</div>
       {payload.map((p,i)=>(
         <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:14, fontWeight:700 }}>
           <span style={{ color: p.color }}>● {p.name}</span>
@@ -396,6 +379,102 @@ function App() {
   const [compareA, setCompareA] = useState(2568);
   const [compareB, setCompareB] = useState(2569);
   const [metric, setMetric] = useState("credit");
+  const [darkMode, setDarkMode] = useState(false);
+
+  const C = darkMode ? DARK : LIGHT;
+  const yearlyChartRef = useRef(null);
+
+  function downloadChartAsImage(containerRef, filename) {
+    const svg = containerRef.current && containerRef.current.querySelector("svg");
+    if (!svg) return;
+    const w = svg.clientWidth || 700, h = svg.clientHeight || 360;
+    let svgStr = new XMLSerializer().serializeToString(svg);
+    if (!/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/.test(svgStr)) {
+      svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = w * scale; canvas.height = h * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+      ctx.fillStyle = C.white;
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = filename;
+      a.click();
+    };
+    img.src = url;
+  }
+
+
+  // these four "UI atoms" are nested in here (not top-level) specifically so they close over
+  // the theme-aware `C` above and repaint automatically when darkMode toggles.
+  function KpiCard({ label, value, sub, tone="blue", onClick, breakdown }) {
+    const bg = tone==="green" ? C.greenPale : tone==="navy" ? C.navy : tone==="teal" ? C.tealPale : C.skyPale;
+    const border = tone==="green" ? C.green : tone==="navy" ? C.navy : tone==="teal" ? C.teal : C.blue;
+    const text = tone==="navy" ? C.white : C.navy;
+    const subColor = tone==="navy" ? C.skyLight : C.sub;
+    return (
+      <div onClick={onClick} style={{
+        background: bg, borderRadius: 18, padding: "16px 18px",
+        border: `2px solid ${border}`, minWidth: 0, flex: "1 1 220px",
+        cursor: onClick ? "pointer" : "default"
+      }}>
+        <div style={{ fontSize: 25, fontWeight: 700, color: subColor, marginBottom: 6, whiteSpace:"nowrap" }}>{label}</div>
+        <div style={{ fontSize: 43, fontWeight: 800, color: text, lineHeight: 1.15, wordBreak:"break-word" }}>{value}</div>
+        {sub && <div style={{ fontSize: 23.5, fontWeight: 700, marginTop: 4, color: subColor }}>{sub}</div>}
+        {breakdown && (
+          <div style={{ fontSize: 21.5, fontWeight: 700, marginTop: 6, paddingTop: 6, borderTop: `1px dashed ${tone==="navy"?"rgba(255,255,255,0.25)":C.skyLight}`, color: subColor, lineHeight: 1.7 }}>
+            {breakdown}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function SectionTitle({ children, dot=C.blue, unit }) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, margin:"6px 0 12px", flexWrap:"wrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
+          <div style={{ width:10, height:10, borderRadius:99, background:dot, flexShrink:0 }} />
+          <h2 style={{ fontSize:34, fontWeight:800, color:C.navy, margin:0 }}>{children}</h2>
+        </div>
+        {unit && (
+          <div style={{
+            flexShrink:0, fontSize:19, fontWeight:700, color:C.navy, background:C.skyLight,
+            borderRadius:99, padding:"4px 12px", whiteSpace:"nowrap"
+          }}>หน่วย: {unit}</div>
+        )}
+      </div>
+    );
+  }
+
+  function Note({ children }) {
+    return (
+      <div style={{
+        fontSize:23, color:C.sub, background:C.skyPale, borderRadius:12,
+        padding:"9px 12px", marginTop:10, lineHeight:1.6, border:`1px dashed ${C.skyLight}`
+      }}>{children}</div>
+    );
+  }
+
+  function Card({ children, style }) {
+    return (
+      <div style={{
+        background: C.white, borderRadius: 22, padding: "18px 14px 8px",
+        boxShadow: darkMode ? "0 4px 18px rgba(0,0,0,0.35)" : "0 4px 18px rgba(11,59,99,0.08)", marginBottom: 20, ...style
+      }}>
+        {children}
+      </div>
+    );
+  }
 
   const latestYearSummary = yearlyData[yearlyData.length-1];
 
@@ -472,10 +551,10 @@ function App() {
   const compareRows = useMemo(() => {
     if (!dataA || !dataB) return [];
     const rows = [
-      { label:"เครดิตรวม", key:"credit", unit:"฿", isPct:false },
-      { label:"ค่าตอบแทนรวม", key:"commission", unit:"฿", isPct:false },
-      { label:"เบี้ยประกันรวม", key:"premium", unit:"฿", isPct:false },
-      { label:"ทุนประกันรวม", key:"sumInsured", unit:"฿", isPct:false },
+      { label:"เครดิตรวม", key:"credit", unit:"money", isPct:false },
+      { label:"ค่าตอบแทนรวม", key:"commission", unit:"money", isPct:false },
+      { label:"เบี้ยประกันรวม", key:"premium", unit:"money", isPct:false },
+      { label:"ทุนประกันรวม", key:"sumInsured", unit:"money", isPct:false },
       { label:"จำนวนกรมธรรม์", key:"policies", unit:"ราย", isPct:false },
       { label:"% เทียบโควต้า", key:"pct", unit:"%", isPct:true },
     ];
@@ -488,83 +567,125 @@ function App() {
   }, [compareA, compareB]);
 
   const yearSelectStyle = {
-    padding:"9px 12px", borderRadius:10, fontWeight:800, fontSize:21,
+    padding:"9px 12px", borderRadius:10, fontWeight:800, fontSize:25,
     border:`2px solid ${C.skyLight}`, background:C.white, color:C.navy, cursor:"pointer"
   };
 
   return (
     <div style={{
       minHeight: "100vh",
-      background: `linear-gradient(180deg, ${C.skyPale} 0%, #F7FCFE 400px, ${C.skyPale} 100%)`,
-      fontFamily: "'Noto Sans Thai', 'Kanit', sans-serif",
+      background: `linear-gradient(180deg, ${C.skyPale} 0%, ${darkMode ? "#0E2234" : "#F7FCFE"} 400px, ${C.skyPale} 100%)`,
+      fontFamily: "'Mali', cursive, sans-serif",
       color: C.ink,
       paddingBottom: 40,
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Mali:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; }
         body { margin:0; }
         p, div, span, td, th, button, li, h1, h2 { line-height: 1.6; }
-        select { font-family: 'Noto Sans Thai', sans-serif; }
+        select { font-family: 'Mali', cursive, sans-serif; }
         ::-webkit-scrollbar { height:6px; width:6px; }
         ::-webkit-scrollbar-thumb { background:${C.skyLight}; border-radius:10px; }
+        @keyframes fadeSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        .anim-fade { animation: fadeSlideIn 0.35s ease both; }
       `}</style>
 
-      {/* HEADER */}
+      {/* HEADER — always the same dark-navy brand banner, regardless of light/dark theme */}
       <div style={{
-        background: `linear-gradient(120deg, ${C.navy} 0%, ${C.navyDeep} 100%)`,
-        padding: "28px 18px 150px", position:"relative", overflow:"hidden"
+        background: `linear-gradient(120deg, ${LIGHT.navy} 0%, ${LIGHT.navyDeep} 100%)`,
+        padding: "28px 18px 170px", position:"relative", overflow:"hidden"
       }}>
         <div style={{ position:"absolute", top:-70, right:-90, width:220, height:220, borderRadius:"50%", background: "rgba(79,174,115,0.22)", zIndex:0 }}/>
         <div style={{ position:"absolute", bottom:-90, left:-60, width:180, height:180, borderRadius:"50%", background: "rgba(46,139,192,0.22)", zIndex:0 }}/>
         <div style={{ position:"relative", maxWidth: 760, margin:"0 auto", zIndex:2, display:"flex", alignItems:"center", gap:16 }}>
           <img src={AVATAR_URI} alt="ศศธร รุจิเรกานุสรณ์" style={{
             width:100, height:100, borderRadius:"50%", objectFit:"cover", flexShrink:0,
-            border:`3px solid ${C.greenLight}`, boxShadow:"0 4px 14px rgba(0,0,0,0.35)"
+            border:`3px solid ${LIGHT.greenLight}`, boxShadow:"0 4px 14px rgba(0,0,0,0.35)"
           }} />
           <div style={{ minWidth:0, flex:1 }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-              <div style={{ fontSize:19.5, fontWeight:800, color:C.greenLight, letterSpacing:1, lineHeight:1.7 }}>กรุงเทพประกันชีวิต · แดชบอร์ดผลงานผู้บริหารหน่วย</div>
-              <div style={{
-                flexShrink:0, fontSize:16.5, fontWeight:800, color:C.navy, background:C.skyLight,
-                borderRadius:99, padding:"3px 10px", whiteSpace:"nowrap"
-              }}>v{APP_VERSION}</div>
+              <div style={{ fontSize:23.5, fontWeight:800, color:LIGHT.greenLight, letterSpacing:1, lineHeight:1.7 }}>กรุงเทพประกันชีวิต · แดชบอร์ดผลงานผู้บริหารหน่วย</div>
+              <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+                <button onClick={()=>setDarkMode(d=>!d)} aria-label="สลับโหมดมืด/สว่าง" style={{
+                  border:"none", cursor:"pointer", fontSize:20, lineHeight:1, borderRadius:99,
+                  background:LIGHT.skyLight, color:LIGHT.navy, width:34, height:34,
+                  display:"flex", alignItems:"center", justifyContent:"center"
+                }}>{darkMode ? "☀️" : "🌙"}</button>
+                <div style={{
+                  fontSize:20, fontWeight:800, color:LIGHT.navy, background:LIGHT.skyLight,
+                  borderRadius:99, padding:"3px 10px", whiteSpace:"nowrap"
+                }}>v{APP_VERSION}</div>
+              </div>
             </div>
-            <h1 style={{ fontFamily:"'Kanit', sans-serif", fontSize:36, fontWeight:800, color:C.white, margin:"6px 0 6px", lineHeight:1.4 }}>ศศธร รุจิเรกานุสรณ์</h1>
-            <div style={{ color:C.skyLight, fontSize:21, fontWeight:700, lineHeight:1.8, paddingBottom:4 }}>
+            <h1 style={{ fontFamily:"'Mali', cursive, sans-serif", fontSize:43, fontWeight:800, color:LIGHT.white, margin:"6px 0 6px", lineHeight:1.4 }}>ศศธร รุจิเรกานุสรณ์</h1>
+            <div style={{ color:LIGHT.skyLight, fontSize:25, fontWeight:700, lineHeight:1.8, paddingBottom:4 }}>
               {latestYearSummary.position} · สาขาเชียงใหม่ · รหัส 00188988
             </div>
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 760, margin:"-60px auto 0", padding:"0 14px", position:"relative", zIndex:3 }}>
+      <div style={{ maxWidth: 760, margin:"-66px auto 0", padding:"0 14px", position:"relative", zIndex:3 }}>
+
+        {/* ===================== 0. THIS MONTH vs LAST MONTH (quick glance, kept at the very top) ===================== */}
+        {prevMonth && (
+          <Card style={{ borderTop:`4px solid ${C.blue}` }}>
+            <SectionTitle dot={C.blue} unit="บาท">เดือนนี้เทียบเดือนก่อน</SectionTitle>
+            <div style={{ fontSize:21.5, fontWeight:700, color:C.sub, marginBottom:10 }}>
+              {prevMonth.label} → {latestMonth.label}
+            </div>
+            <div key={latestMonth.label} className="anim-fade" style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
+              {[
+                { label:"เครดิต", a:prevMonth.credit, b:latestMonth.credit },
+                { label:"ค่าตอบแทน", a:prevMonth.commission, b:latestMonth.commission },
+                { label:"กรมธรรม์ (ราย)", a:prevMonth.policies, b:latestMonth.policies, isCount:true },
+              ].map((r,i) => {
+                const delta = r.b - r.a;
+                const up = delta > 0.0001, down = delta < -0.0001;
+                const pct = r.a !== 0 ? (delta/Math.abs(r.a)*100) : null;
+                return (
+                  <div key={i} style={{
+                    flex:"1 1 220px", background:C.skyPale, borderRadius:16, padding:"12px 16px",
+                    border:`2px solid ${up?C.green:down?C.red:C.skyLight}`
+                  }}>
+                    <div style={{ fontSize:19, fontWeight:700, color:C.sub, marginBottom:4 }}>{r.label}</div>
+                    <div style={{ fontSize:30, fontWeight:800, color:C.navy }}>{fmt(r.b, r.isCount?0:0)}</div>
+                    <div style={{ fontSize:19, fontWeight:700, marginTop:2, color: up?C.green:down?C.red:C.sub }}>
+                      {up?"▲":down?"▼":"•"} {delta>=0?"+":""}{fmt(delta)}{pct!=null && <> ({pct>=0?"+":""}{fmt(pct,1)}%)</>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
 
         {/* ===================== 1. ALL-TIME TOTALS ===================== */}
         <Card>
-          <SectionTitle dot={C.navy}>ผลงานสะสมตลอดโครงการ (2558–2569)</SectionTitle>
+          <SectionTitle dot={C.navy} unit="บาท">ผลงานสะสมตลอดโครงการ (2558–2569)</SectionTitle>
           <div style={{ display:"flex", flexWrap:"wrap", gap:12, marginBottom:8 }}>
-            <KpiCard tone="navy" label="เบี้ยประกันสะสมรวม" value={"฿"+fmtCompact(allTime.premium)}
-              sub={`สูงสุดปี ${maxPremiumYear.yearFull} (฿${fmtCompact(maxPremiumYear.premium)})`} />
-            <KpiCard tone="green" label="ทุนประกันสะสมรวม" value={"฿"+fmtCompact(allTime.sumInsured)}
-              sub={`สูงสุดปี ${maxSumInsuredYear.yearFull} (฿${fmtCompact(maxSumInsuredYear.sumInsured)})`} />
+            <KpiCard tone="navy" label="เบี้ยประกันสะสมรวม" value={fmt(allTime.premium)}
+              sub={`สูงสุดปี ${maxPremiumYear.yearFull} (${fmt(maxPremiumYear.premium)})`} />
+            <KpiCard tone="green" label="ทุนประกันสะสมรวม" value={fmt(allTime.sumInsured)}
+              sub={`สูงสุดปี ${maxSumInsuredYear.yearFull} (${fmt(maxSumInsuredYear.sumInsured)})`} />
             <KpiCard tone="blue" label="จำนวนกรมธรรม์สะสม" value={fmt(allTime.policies)+" ราย"}
               sub={`สูงสุดปี ${maxPoliciesYear.yearFull} (${maxPoliciesYear.policies} ราย)`} />
-            <KpiCard tone="teal" label="ค่าตอบแทนสะสมรวม" value={"฿"+fmtCompact(allTime.commission)}
-              sub={`สูงสุดปี ${maxCommissionYear.yearFull} (฿${fmtCompact(maxCommissionYear.commission)})`}
-              breakdown={<>สามัญ ฿{fmt(allTime.commOrd)} · LBDU ฿{fmt(allTime.commLbdu)}</>} />
+            <KpiCard tone="teal" label="ค่าตอบแทนสะสมรวม" value={fmt(allTime.commission)}
+              sub={`สูงสุดปี ${maxCommissionYear.yearFull} (${fmt(maxCommissionYear.commission)})`}
+              breakdown={<>สามัญ {fmt(allTime.commOrd)} · LBDU {fmt(allTime.commLbdu)}</>} />
           </div>
           <Note>
             ปี {maxPremiumYear.yearFull} มีเบี้ยสูงสุด แต่เป็นข้อมูลถึงเดือนกันยายนเท่านั้น (ยังไม่ครบปี) —
-            ถ้านับเฉพาะปีที่ข้อมูลครบ 12 เดือน ปีที่เบี้ยสูงสุดคือ 2562 (฿{fmt(YEARS[2562] ? yearlyData.find(y=>y.yearFull===2562).premium : 0)})
+            ถ้านับเฉพาะปีที่ข้อมูลครบ 12 เดือน ปีที่เบี้ยสูงสุดคือ 2562 ({fmt(YEARS[2562] ? yearlyData.find(y=>y.yearFull===2562).premium : 0)})
           </Note>
 
           {/* all-time single-month records */}
           <div style={{ marginTop:16 }}>
-            <div style={{ fontSize:22.5, fontWeight:800, color:C.navy, marginBottom:8 }}>สถิติเดือนเดียวสูงสุดตลอดกาล</div>
+            <div style={{ fontSize:27, fontWeight:800, color:C.navy, marginBottom:8 }}>สถิติเดือนเดียวสูงสุดตลอดกาล</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:12 }}>
-              <KpiCard tone="teal" label="เครดิตสูงสุดในเดือนเดียว" value={"฿"+fmtCompact(bestCreditMonth.v)} sub={bestCreditMonth.label} />
-              <KpiCard tone="teal" label="เบี้ยสูงสุดในเดือนเดียว" value={"฿"+fmtCompact(bestPremiumMonth.v)} sub={bestPremiumMonth.label} />
+              <KpiCard tone="teal" label="เครดิตสูงสุดในเดือนเดียว" value={fmt(bestCreditMonth.v)} sub={bestCreditMonth.label} />
+              <KpiCard tone="teal" label="เบี้ยสูงสุดในเดือนเดียว" value={fmt(bestPremiumMonth.v)} sub={bestPremiumMonth.label} />
               <KpiCard tone="teal" label="กรมธรรม์มากสุดในเดือนเดียว" value={bestPoliciesMonth.v+" ราย"} sub={bestPoliciesMonth.label} />
             </div>
           </div>
@@ -572,45 +693,52 @@ function App() {
 
         {/* ===================== YEARLY TREND: CREDIT vs QUOTA (clickable) ===================== */}
         <Card>
-          <SectionTitle dot={C.blue}>เครดิตผลงานเทียบโควต้า รายปี — แตะแท่งเพื่อดูรายละเอียด</SectionTitle>
-          <div style={{ width:"100%", height:330 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
+            <SectionTitle dot={C.blue} unit="บาท">เครดิตผลงานเทียบโควต้า รายปี — แตะแท่งเพื่อดูรายละเอียด</SectionTitle>
+          </div>
+          <button onClick={()=>downloadChartAsImage(yearlyChartRef, "เครดิตผลงานรายปี.png")} style={{
+            display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"7px 14px",
+            borderRadius:10, fontSize:19, fontWeight:700, cursor:"pointer",
+            border:`2px solid ${C.blue}`, background:"transparent", color:C.blue
+          }}>⬇ ดาวน์โหลดกราฟเป็นรูปภาพ</button>
+          <div ref={yearlyChartRef} style={{ width:"100%", height:360 }}>
             <ResponsiveContainer>
               <ComposedChart data={yearlyData} margin={{ top:26, right:8, left:-14, bottom:0 }}>
                 <CartesianGrid stroke={C.skyLight} vertical={false} />
-                <XAxis dataKey="year" tick={{ fontSize:19.5, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false}/>
-                <YAxis tick={{ fontSize:16.5, fill:C.sub }} tickFormatter={fmtCompact} axisLine={false} tickLine={false} width={64}/>
+                <XAxis dataKey="year" tick={{ fontSize:23.5, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false}/>
+                <YAxis tick={{ fontSize:20, fill:C.sub }} tickFormatter={fmtCompact} axisLine={false} tickLine={false} width={72}/>
                 <Tooltip content={({active,payload,label})=>{
                   if(!active||!payload||!payload.length) return null;
                   const row = yearlyData.find(r=>r.year===label);
                   if(!row) return null;
                   return (
-                    <div style={{ background:C.navy, color:C.white, borderRadius:12, padding:"10px 14px", fontSize:19.5, fontWeight:700 }}>
-                      <div style={{ fontWeight:800, marginBottom:4, color:C.skyLight }}>{row.yearFull}</div>
-                      <div>เครดิตรวม: ฿{fmt(row.credit)}</div>
-                      <div style={{ color:"#9FD3F0" }}>● ตัวแทนตรง: ฿{fmt(row.direct)} ({row.directPct}%)</div>
-                      <div style={{ color:"#B7E8C7" }}>● ทีมงาน 30%: ฿{fmt(row.team30)} ({row.team30Pct}%)</div>
-                      <div style={{ color:C.amber }}>◆ โควต้ารวม: ฿{fmt(row.quotaTotal)}</div>
+                    <div style={{ background:LIGHT.navy, color:LIGHT.white, borderRadius:12, padding:"10px 14px", fontSize:23.5, fontWeight:700 }}>
+                      <div style={{ fontWeight:800, marginBottom:4, color:LIGHT.skyLight }}>{row.yearFull}</div>
+                      <div>เครดิตรวม: {fmt(row.credit)}</div>
+                      <div style={{ color:"#9FD3F0" }}>● ตัวแทนตรง: {fmt(row.direct)} ({row.directPct}%)</div>
+                      <div style={{ color:"#B7E8C7" }}>● ทีมงาน 30%: {fmt(row.team30)} ({row.team30Pct}%)</div>
+                      <div style={{ color:LIGHT.amber }}>◆ โควต้ารวม: {fmt(row.quotaTotal)}</div>
                     </div>
                   );
                 }} />
                 <Bar dataKey="direct" name="ตัวแทนตรง" stackId="a" fill={C.blue} radius={[0,0,0,0]} maxBarSize={34}
                   onClick={(data)=> setSelectedYear(data && data.payload ? data.payload.yearFull : selectedYear)} cursor="pointer">
                   <LabelList dataKey="directPct" position="center" formatter={(v)=> v>=8 ? v+"%" : ""}
-                    style={{ fill:C.white, fontSize:18, fontWeight:800 }} />
+                    style={{ fill:C.white, fontSize:21.5, fontWeight:800 }} />
                 </Bar>
                 <Bar dataKey="team30" name="ทีมงาน 30%" stackId="a" fill={C.green} radius={[8,8,0,0]} maxBarSize={34}
                   onClick={(data)=> setSelectedYear(data && data.payload ? data.payload.yearFull : selectedYear)} cursor="pointer">
                   <LabelList dataKey="team30Pct" position="center" formatter={(v)=> v>=8 ? v+"%" : ""}
-                    style={{ fill:C.white, fontSize:18, fontWeight:800 }} />
+                    style={{ fill:C.white, fontSize:21.5, fontWeight:800 }} />
                   <LabelList dataKey="credit" position="top" offset={8}
-                    formatter={(v)=> fmt(Math.round(v/1000)) + " พัน"}
-                    style={{ fill:C.navy, fontSize:19, fontWeight:800 }} />
+                    formatter={(v)=> fmt(v)}
+                    style={{ fill:C.navy, fontSize:23, fontWeight:800 }} />
                 </Bar>
                 <Line type="stepAfter" dataKey="quotaTotal" name="โควต้ารวม" stroke={C.amber} strokeWidth={2.5} strokeDasharray="6 4" dot={{ r:3, fill:C.amber }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ fontSize:18, color:C.sub, textAlign:"center", marginTop:2, paddingBottom:4 }}>
+          <div style={{ fontSize:21.5, color:C.sub, textAlign:"center", marginTop:2, paddingBottom:4 }}>
             แท่ง = เครดิตรวม แยกสัดส่วนตัวแทนตรง (ฟ้า) / ทีมงาน 30% (เขียว) · ตัวเลขบนแท่ง = เครดิตรวมหลักพัน · เส้นประส้ม = โควต้ารวมของปีนั้น (แตะแท่งเพื่อดูปีนั้น)
           </div>
 
@@ -618,7 +746,7 @@ function App() {
           <div style={{ display:"flex", gap:8, overflowX:"auto", padding:"10px 0 6px" }}>
             {YEAR_LIST.slice().reverse().map(y => (
               <button key={y} onClick={()=>setSelectedYear(y)} style={{
-                flex:"0 0 auto", padding:"9px 16px", borderRadius:99, fontWeight:800, fontSize:21,
+                flex:"0 0 auto", padding:"9px 16px", borderRadius:99, fontWeight:800, fontSize:25,
                 border: `2px solid ${selectedYear===y ? C.navy : C.skyLight}`,
                 background: selectedYear===y ? C.navy : C.white,
                 color: selectedYear===y ? C.white : C.navy,
@@ -628,33 +756,33 @@ function App() {
           </div>
 
           <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginTop:10 }}>
-            <KpiCard label={`เครดิตรวม ปี ${selectedYear}`} value={"฿"+fmtCompact(selSummary.credit)} tone="blue" />
+            <KpiCard label={`เครดิตรวม ปี ${selectedYear}`} value={fmt(selSummary.credit)} tone="blue" />
             <KpiCard label="เทียบโควต้า" value={(selSummary.pct>=0?"+":"")+fmt(selSummary.pct,1)+"%"} tone="navy"
-              sub={`โควต้า ฿${fmt(selSummary.quota)}/เดือน`} />
-            <KpiCard label="ค่าตอบแทนรวม" value={"฿"+fmtCompact(selSummary.commission)} tone="green"
-              breakdown={<>สามัญ ฿{fmt(selSummary.commOrd)} · LBDU ฿{fmt(selSummary.commLbdu)}</>} />
+              sub={`โควต้า ${fmt(selSummary.quota)}/เดือน`} />
+            <KpiCard label="ค่าตอบแทนรวม" value={fmt(selSummary.commission)} tone="green"
+              breakdown={<>สามัญ {fmt(selSummary.commOrd)} · LBDU {fmt(selSummary.commLbdu)}</>} />
           </div>
         </Card>
 
         {/* ===================== CREDIT COMPOSITION (direct commission vs team 30%) PER SELECTED YEAR ===================== */}
         <Card>
-          <SectionTitle dot={C.green}>สัดส่วนเครดิต: ผลงานตัวแทนตรง (ค่านายหน้า) vs เครดิตทีมงาน (30%) — ปี {selectedYear}</SectionTitle>
+          <SectionTitle dot={C.green} unit="บาท">สัดส่วนเครดิต: ผลงานตัวแทนตรง (ค่านายหน้า) vs เครดิตทีมงาน (30%) — ปี {selectedYear}</SectionTitle>
 
-          <div style={{ width:"100%", height:290 }}>
+          <div key={"comp-"+selectedYear} className="anim-fade" style={{ width:"100%", height:320 }}>
             <ResponsiveContainer>
               <ComposedChart data={compositionData} margin={{ top:6, right:8, left:-14, bottom:0 }} stackOffset="expand">
                 <CartesianGrid stroke={C.skyLight} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize:18, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false} interval={0}/>
-                <YAxis tickFormatter={(v)=>Math.round(v*100)+"%"} tick={{ fontSize:16.5, fill:C.sub }} axisLine={false} tickLine={false} width={48}/>
+                <XAxis dataKey="month" tick={{ fontSize:21.5, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false} interval={0}/>
+                <YAxis tickFormatter={(v)=>Math.round(v*100)+"%"} tick={{ fontSize:20, fill:C.sub }} axisLine={false} tickLine={false} width={56}/>
                 <Tooltip content={({active,payload,label})=>{
                   if(!active||!payload||!payload.length) return null;
                   const row = compositionData.find(r=>r.month===label);
                   if(!row || row.direct==null) return null;
                   return (
-                    <div style={{ background:C.navy, color:C.white, borderRadius:12, padding:"10px 14px", fontSize:19.5 }}>
-                      <div style={{ fontWeight:800, marginBottom:4, color:C.skyLight }}>{label} {selectedYear}</div>
-                      <div>● ผลงานตัวแทนตรง (ค่านายหน้า): ฿{fmt(row.direct)} ({row.directPct}%)</div>
-                      <div>● เครดิตทีมงาน (30%): ฿{fmt(row.team30)} ({row.team30Pct}%)</div>
+                    <div style={{ background:LIGHT.navy, color:LIGHT.white, borderRadius:12, padding:"10px 14px", fontSize:23.5 }}>
+                      <div style={{ fontWeight:800, marginBottom:4, color:LIGHT.skyLight }}>{label} {selectedYear}</div>
+                      <div>● ผลงานตัวแทนตรง (ค่านายหน้า): {fmt(row.direct)} ({row.directPct}%)</div>
+                      <div>● เครดิตทีมงาน (30%): {fmt(row.team30)} ({row.team30Pct}%)</div>
                     </div>
                   );
                 }} />
@@ -666,7 +794,7 @@ function App() {
           <Note>
             <b>สูตร:</b> เครดิต = ค่านายหน้า (ผลงานตัวแทนตรง) + เครดิตในทีม 30% (ผลงานทีมในสังกัด) — ตรวจสอบแล้วว่าตัวเลขสองคอลัมน์นี้บวกกันเท่ากับเครดิตรวมทุกเดือน
           </Note>
-          <div style={{ display:"flex", gap:16, marginTop:10, fontSize:19.5, fontWeight:800 }}>
+          <div style={{ display:"flex", gap:16, marginTop:10, fontSize:23.5, fontWeight:800 }}>
             <span style={{ color:C.blue }}>■ ตัวแทนตรง (ค่านายหน้า)</span>
             <span style={{ color:C.green }}>■ ทีมงาน (เครดิต 30%)</span>
           </div>
@@ -674,17 +802,17 @@ function App() {
 
         {/* ===================== YEAR-OVER-YEAR COMPARISON ===================== */}
         <Card>
-          <SectionTitle dot={C.blue}>เปรียบเทียบผลงานรายปี</SectionTitle>
+          <SectionTitle dot={C.blue} unit="บาท">เปรียบเทียบผลงานรายปี</SectionTitle>
           <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:16 }}>
             <select value={compareA} onChange={e=>setCompareA(Number(e.target.value))} style={yearSelectStyle}>
               {YEAR_LIST.map(y => <option key={y} value={y}>ปี {y}</option>)}
             </select>
-            <span style={{ fontWeight:800, color:C.sub, fontSize:27 }}>→</span>
+            <span style={{ fontWeight:800, color:C.sub, fontSize:32.5 }}>→</span>
             <select value={compareB} onChange={e=>setCompareB(Number(e.target.value))} style={yearSelectStyle}>
               {YEAR_LIST.map(y => <option key={y} value={y}>ปี {y}</option>)}
             </select>
             <button onClick={()=>{ const t=compareA; setCompareA(compareB); setCompareB(t); }} style={{
-              padding:"9px 14px", borderRadius:10, fontWeight:800, fontSize:19.5, cursor:"pointer",
+              padding:"9px 14px", borderRadius:10, fontWeight:800, fontSize:23.5, cursor:"pointer",
               border:`2px solid ${C.navy}`, background:C.navy, color:C.white
             }}>สลับ</button>
           </div>
@@ -699,25 +827,25 @@ function App() {
                   background: i%2? C.skyPale : C.white, borderRadius:14, padding:"12px 14px",
                   border:`1.5px solid ${C.skyLight}`
                 }}>
-                  <div style={{ fontSize:20, fontWeight:800, color:C.navy, marginBottom:6 }}>{r.label}</div>
+                  <div style={{ fontSize:24, fontWeight:800, color:C.navy, marginBottom:6 }}>{r.label}</div>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-                    <div style={{ fontSize:19.5, color:C.sub, fontWeight:700 }}>
-                      ปี {compareA}: <b style={{ color:C.ink }}>{r.unit==="฿" ? "฿"+fmt(r.a) : fmt(r.a,r.isPct?1:0)+(r.unit==="%"?"%":" "+r.unit)}</b>
+                    <div style={{ fontSize:23.5, color:C.sub, fontWeight:700 }}>
+                      ปี {compareA}: <b style={{ color:C.ink }}>{r.unit==="money" ? fmt(r.a) : fmt(r.a,r.isPct?1:0)+(r.unit==="%"?"%":" "+r.unit)}</b>
                       {"  →  "}
-                      ปี {compareB}: <b style={{ color:C.ink }}>{r.unit==="฿" ? "฿"+fmt(r.b) : fmt(r.b,r.isPct?1:0)+(r.unit==="%"?"%":" "+r.unit)}</b>
+                      ปี {compareB}: <b style={{ color:C.ink }}>{r.unit==="money" ? fmt(r.b) : fmt(r.b,r.isPct?1:0)+(r.unit==="%"?"%":" "+r.unit)}</b>
                     </div>
                     <div style={{
-                      fontSize:21, fontWeight:800, color:deltaColor, background: up?C.greenPale:down?"#FBEAE9":C.skyPale,
+                      fontSize:25, fontWeight:800, color:deltaColor, background: up?C.greenPale:down?"#FBEAE9":C.skyPale,
                       borderRadius:99, padding:"4px 10px", whiteSpace:"nowrap"
                     }}>
-                      {arrow} {r.delta>=0?"+":""}{r.unit==="฿" ? fmtCompact(r.delta) : fmt(r.delta, r.isPct?1:0)}{r.unit==="%"?"pt":""}
+                      {arrow} {r.delta>=0?"+":""}{r.unit==="money" ? fmt(r.delta) : fmt(r.delta, r.isPct?1:0)}{r.unit==="%"?"pt":""}
                       {r.deltaPct!=null && <span style={{ opacity:0.85 }}> ({r.deltaPct>=0?"+":""}{fmt(r.deltaPct,1)}%)</span>}
                     </div>
                   </div>
                   {r.key==="commission" && (
-                    <div style={{ fontSize:17, color:C.sub, fontWeight:700, marginTop:6, paddingTop:6, borderTop:`1px dashed ${C.skyLight}` }}>
-                      สามัญ: ปี {compareA} ฿{fmt(dataA.commOrd)} → ปี {compareB} ฿{fmt(dataB.commOrd)}
-                      &nbsp;·&nbsp; LBDU: ปี {compareA} ฿{fmt(dataA.commLbdu)} → ปี {compareB} ฿{fmt(dataB.commLbdu)}
+                    <div style={{ fontSize:20.5, color:C.sub, fontWeight:700, marginTop:6, paddingTop:6, borderTop:`1px dashed ${C.skyLight}` }}>
+                      สามัญ: ปี {compareA} {fmt(dataA.commOrd)} → ปี {compareB} {fmt(dataB.commOrd)}
+                      &nbsp;·&nbsp; LBDU: ปี {compareA} {fmt(dataA.commLbdu)} → ปี {compareB} {fmt(dataB.commLbdu)}
                     </div>
                   )}
                 </div>
@@ -729,9 +857,9 @@ function App() {
 
         {/* ===================== AUM — SEPARATE FROM INSURANCE ===================== */}
         <Card style={{ borderTop:`4px solid ${C.teal}` }}>
-          <SectionTitle dot={C.teal}>AUM กองทุนรวม (แยกจากผลงานประกัน)</SectionTitle>
+          <SectionTitle dot={C.teal} unit="บาท">AUM กองทุนรวม (แยกจากผลงานประกัน)</SectionTitle>
           <Note>AUM คือมูลค่าทรัพย์สินภายใต้การบริหารจากธุรกิจ<b>กองทุนรวม</b> ไม่เกี่ยวกับเบี้ย/ทุนประกันชีวิต จึงแสดงแยกไว้ต่างหากในหัวข้อนี้</Note>
-          <div style={{ width:"100%", height:270, marginTop:12 }}>
+          <div style={{ width:"100%", height:300, marginTop:12 }}>
             <ResponsiveContainer>
               <AreaChart data={aumTimeline} margin={{ top:6, right:8, left:-14, bottom:0 }}>
                 <defs>
@@ -741,27 +869,27 @@ function App() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid stroke={C.tealPale} vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize:15, fill:C.sub }} axisLine={{stroke:C.tealPale}} tickLine={false}
+                <XAxis dataKey="label" tick={{ fontSize:18, fill:C.sub }} axisLine={{stroke:C.tealPale}} tickLine={false}
                   interval={11} />
-                <YAxis tick={{ fontSize:16.5, fill:C.sub }} tickFormatter={fmtCompact} axisLine={false} tickLine={false} width={64} domain={['auto','auto']} />
+                <YAxis tick={{ fontSize:20, fill:C.sub }} tickFormatter={fmtCompact} axisLine={false} tickLine={false} width={72} domain={['auto','auto']} />
                 <Tooltip content={<CustomTooltip />} />
                 <Area type="monotone" dataKey="aum" name="AUM" stroke={C.teal} strokeWidth={2.5} fill="url(#aumFill)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div style={{ fontSize:18, color:C.sub, textAlign:"center", marginTop:2, paddingBottom:8 }}>
+          <div style={{ fontSize:21.5, color:C.sub, textAlign:"center", marginTop:2, paddingBottom:8 }}>
             แนวโน้ม AUM ตั้งแต่เริ่มต้นโครงการ (ม.ค. 2558) จนถึงล่าสุด ({aumTimeline[aumTimeline.length-1].label}) — {aumTimeline.length} เดือน
           </div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
-            <KpiCard tone="teal" label="AUM ล่าสุด" value={"฿"+fmtCompact(aumTimeline[aumTimeline.length-1].aum)} sub={aumTimeline[aumTimeline.length-1].label} />
-            <KpiCard tone="teal" label="AUM สูงสุดตลอดกาล" value={"฿"+fmtCompact(Math.max(...aumTimeline.map(a=>a.aum)))}
+            <KpiCard tone="teal" label="AUM ล่าสุด" value={fmt(aumTimeline[aumTimeline.length-1].aum)} sub={aumTimeline[aumTimeline.length-1].label} />
+            <KpiCard tone="teal" label="AUM สูงสุดตลอดกาล" value={fmt(Math.max(...aumTimeline.map(a=>a.aum)))}
               sub={aumTimeline.find(a=>a.aum===Math.max(...aumTimeline.map(x=>x.aum))).label} />
           </div>
         </Card>
 
         {/* ===================== MONTHLY METRIC EXPLORER ===================== */}
         <Card style={{ paddingBottom:18 }}>
-          <SectionTitle dot={C.navy}>สำรวจตัวชี้วัดรายเดือน — ปี {selectedYear}</SectionTitle>
+          <SectionTitle dot={C.navy} unit={metric==="policies" ? "ราย" : "บาท"}>สำรวจตัวชี้วัดรายเดือน — ปี {selectedYear}</SectionTitle>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
             {[
               ["credit","เครดิต", C.blue],
@@ -769,7 +897,7 @@ function App() {
               ["policies","กรมธรรม์", C.navy],
             ].map(([key,label,color])=>(
               <button key={key} onClick={()=>setMetric(key)} style={{
-                padding:"7px 14px", borderRadius:10, fontSize:19.5, fontWeight:800, cursor:"pointer",
+                padding:"7px 14px", borderRadius:10, fontSize:23.5, fontWeight:800, cursor:"pointer",
                 border:`2px solid ${color}`,
                 background: metric===key ? color : "transparent",
                 color: metric===key ? C.white : color,
@@ -777,29 +905,29 @@ function App() {
             ))}
           </div>
 
-          <div style={{ fontSize:21, fontWeight:800, color:C.navy, marginBottom:4 }}>{metricLabel}</div>
-          <div style={{ width:"100%", height:290 }}>
+          <div style={{ fontSize:25, fontWeight:800, color:C.navy, marginBottom:4 }}>{metricLabel}</div>
+          <div key={"metric-"+selectedYear+"-"+metric} className="anim-fade" style={{ width:"100%", height:320 }}>
             <ResponsiveContainer>
               <ComposedChart data={monthlyChartData} margin={{ top:6, right:8, left:-14, bottom:0 }}>
                 <CartesianGrid stroke={C.skyLight} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize:18, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false} interval={0}/>
-                <YAxis tick={{ fontSize:16.5, fill:C.sub }} tickFormatter={fmtCompact} axisLine={false} tickLine={false} width={60}/>
+                <XAxis dataKey="month" tick={{ fontSize:21.5, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false} interval={0}/>
+                <YAxis tick={{ fontSize:20, fill:C.sub }} tickFormatter={fmtCompact} axisLine={false} tickLine={false} width={70}/>
                 {metric==="commission" ? (
                   <Tooltip content={({active,payload,label})=>{
                     if(!active||!payload||!payload.length) return null;
                     const row = monthlyChartData.find(r=>r.month===label);
                     if(!row) return null;
                     return (
-                      <div style={{ background:C.navy, color:C.white, borderRadius:12, padding:"10px 14px", fontSize:19.5, fontWeight:700 }}>
-                        <div style={{ fontWeight:800, marginBottom:4, color:C.skyLight }}>{label} {selectedYear}</div>
-                        <div>รวม: ฿{fmt(row.commission)}</div>
+                      <div style={{ background:LIGHT.navy, color:LIGHT.white, borderRadius:12, padding:"10px 14px", fontSize:23.5, fontWeight:700 }}>
+                        <div style={{ fontWeight:800, marginBottom:4, color:LIGHT.skyLight }}>{label} {selectedYear}</div>
+                        <div>รวม: {fmt(row.commission)}</div>
                         {row.hasBreakdown ? (
                           <>
-                            <div style={{ color:"#9FD3F0" }}>● สามัญ: ฿{fmt(row.commOrd)}</div>
-                            <div style={{ color:"#B7E8C7" }}>● LBDU: ฿{fmt(row.commLbdu)}</div>
+                            <div style={{ color:"#9FD3F0" }}>● สามัญ: {fmt(row.commOrd)}</div>
+                            <div style={{ color:"#B7E8C7" }}>● LBDU: {fmt(row.commLbdu)}</div>
                           </>
                         ) : (
-                          <div style={{ opacity:0.7, fontSize:17 }}>(ไม่มีข้อมูลแยกสามัญ/LBDU เดือนนี้)</div>
+                          <div style={{ opacity:0.7, fontSize:20.5 }}>(ไม่มีข้อมูลแยกสามัญ/LBDU เดือนนี้)</div>
                         )}
                       </div>
                     );
@@ -807,7 +935,7 @@ function App() {
                 ) : (
                   <Tooltip content={<CustomTooltip />} />
                 )}
-                {metric==="credit" && <ReferenceLine y={yearSel.quota} stroke={C.amber} strokeDasharray="5 4" label={{ value:"โควต้า", fontSize:16.5, fill:C.amber, position:"insideTopRight" }} />}
+                {metric==="credit" && <ReferenceLine y={yearSel.quota} stroke={C.amber} strokeDasharray="5 4" label={{ value:"โควต้า", fontSize:20, fill:C.amber, position:"insideTopRight" }} />}
                 {metric==="commission" && <Bar key="commOrd" dataKey="commOrd" name="สามัญ" stackId="c" fill={C.blue} radius={[0,0,0,0]} maxBarSize={30} />}
                 {metric==="commission" && <Bar key="commLbdu" dataKey="commLbdu" name="LBDU" stackId="c" fill={C.green} radius={[8,8,0,0]} maxBarSize={30} />}
                 {metric!=="commission" && <Bar key="single" dataKey={metric} name={metricLabel.split(" ")[0]} radius={[8,8,0,0]} maxBarSize={30}
@@ -816,7 +944,7 @@ function App() {
             </ResponsiveContainer>
           </div>
           {metric==="commission" && (
-            <div style={{ display:"flex", gap:16, marginTop:8, fontSize:19, fontWeight:800 }}>
+            <div style={{ display:"flex", gap:16, marginTop:8, fontSize:23, fontWeight:800 }}>
               <span style={{ color:C.blue }}>■ สามัญ</span>
               <span style={{ color:C.green }}>■ LBDU</span>
             </div>
@@ -825,9 +953,9 @@ function App() {
 
         {/* ===================== MONTHLY TABLE ===================== */}
         <Card>
-          <SectionTitle dot={C.blue}>ตารางรายเดือน ปี {selectedYear}</SectionTitle>
-          <div style={{ overflowX:"auto", marginBottom:14 }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:20, minWidth:620 }}>
+          <SectionTitle dot={C.blue} unit="บาท">ตารางรายเดือน ปี {selectedYear}</SectionTitle>
+          <div key={"table-"+selectedYear} className="anim-fade" style={{ overflowX:"auto", marginBottom:14 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:24, minWidth:620 }}>
               <thead>
                 <tr style={{ background:C.skyLight }}>
                   {["เดือน","เครดิต","ราย","เบี้ย","%เทียบโควต้า","ตรง/ทีม30%","ค่าตอบแทน"].map((h,i)=>(
@@ -845,13 +973,13 @@ function App() {
                     <td style={{ padding:"8px", textAlign:"right", fontWeight:800, color: row[4]==null?C.sub:(row[4]>=0?C.green:C.red) }}>
                       {row[4]==null? "-" : (row[4]>=0?"+":"")+fmt(row[4],1)+"%"}
                     </td>
-                    <td style={{ padding:"8px", textAlign:"right", fontSize:18, color:C.sub }}>
+                    <td style={{ padding:"8px", textAlign:"right", fontSize:21.5, color:C.sub }}>
                       {row[7]!=null ? `${Math.round(row[7]/(row[7]+row[8])*100)}/${Math.round(row[8]/(row[7]+row[8])*100)}` : "-"}
                     </td>
                     <td style={{ padding:"8px", textAlign:"right", fontWeight:800, color:C.blue }}>
                       {fmt(row[6])}
                       {row[9]!=null && (
-                        <div style={{ fontSize:16, fontWeight:700, color:C.sub, marginTop:2 }}>
+                        <div style={{ fontSize:19, fontWeight:700, color:C.sub, marginTop:2 }}>
                           สามัญ {fmt(row[9])} / LBDU {fmt(row[10])}
                         </div>
                       )}
@@ -871,12 +999,12 @@ function App() {
                   <td style={{ padding:"9px 8px", textAlign:"right", fontWeight:800 }}>{fmt(selSummary.policies)}</td>
                   <td style={{ padding:"9px 8px", textAlign:"right", fontWeight:800 }}>{fmt(selSummary.premium)}</td>
                   <td style={{ padding:"9px 8px", textAlign:"right", fontWeight:800 }}>{(selSummary.pct>=0?"+":"")+fmt(selSummary.pct,1)+"%"}</td>
-                  <td style={{ padding:"9px 8px", textAlign:"right", fontWeight:800, fontSize:18 }}>
+                  <td style={{ padding:"9px 8px", textAlign:"right", fontWeight:800, fontSize:21.5 }}>
                     {Math.round(selSummary.direct/(selSummary.direct+selSummary.team30)*100)}/{Math.round(selSummary.team30/(selSummary.direct+selSummary.team30)*100)}
                   </td>
                   <td style={{ padding:"9px 8px", textAlign:"right", fontWeight:800 }}>
                     {fmt(selSummary.commission)}
-                    <div style={{ fontSize:16, fontWeight:700, color:C.skyLight, marginTop:2 }}>
+                    <div style={{ fontSize:19, fontWeight:700, color:C.skyLight, marginTop:2 }}>
                       สามัญ {fmt(selSummary.commOrd)} / LBDU {fmt(selSummary.commLbdu)}
                     </div>
                   </td>
@@ -886,7 +1014,7 @@ function App() {
           </div>
         </Card>
 
-        <div style={{ textAlign:"center", fontSize:18, color:C.sub, padding:"6px 0 20px", lineHeight:1.7 }}>
+        <div style={{ textAlign:"center", fontSize:21.5, color:C.sub, padding:"6px 0 20px", lineHeight:1.7 }}>
           ข้อมูลจากเอกสาร "เครดิตผลงานและผลประโยชน์ค่าตอบแทนผู้บริหารหน่วย" ปี 2558–2569 (ณ วันที่พิมพ์ 03/10/2569)<br/>
           หมายเหตุ: ราย/ทุน/เบี้ย คือผลงานตัวแทนตรงของป้าเป็ด · เครดิตและค่าตอบแทนรวมเป็นตัวเลขระดับหน่วย · AUM มาจากธุรกิจกองทุนรวม แยกจากผลงานประกัน<br/>
           <span style={{ fontWeight:800, color:C.navy }}>เวอร์ชัน {APP_VERSION}</span> · อัปเดตล่าสุด {BUILD_DATE}
