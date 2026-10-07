@@ -34,7 +34,7 @@
 <script type="text/babel" data-presets="react">
 const { useState, useMemo, useRef, useEffect } = React;
 const {
-  ComposedChart, LineChart, BarChart, Line, Bar, Area, AreaChart, LabelList,
+  ComposedChart, LineChart, BarChart, Line, Bar, Area, AreaChart, LabelList, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine
 } = Recharts;
 
@@ -43,7 +43,7 @@ const AVATAR_URI = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDB
 
 /* ======================= APP VERSION ======================= */
 // อัปเดตเลขนี้ทุกครั้งที่ปรับแดชบอร์ด แล้วเทียบกับไฟล์เก่าได้ว่าอันไหนใหม่กว่า
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.3.0";
 const BUILD_DATE = "7 ต.ค. 2569";
 
 /* ======================= COLOR TOKENS (BLA: navy / sky blue / soft green) ======================= */
@@ -263,6 +263,7 @@ const YEAR_LIST = Object.keys(YEARS).map(Number).sort((a,b)=>a-b);
 
 /* ======================= HELPERS ======================= */
 const fmt = (n, d=0) => n == null ? "-" : n.toLocaleString("th-TH", { minimumFractionDigits:d, maximumFractionDigits:d });
+const fmtThousands = (n) => n == null ? "-" : fmt(Math.round(n/1000));
 const fmtCompact = (n) => {
   if (n == null) return "-";
   if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2) + "M";
@@ -346,6 +347,15 @@ YEAR_LIST.forEach(y => {
 });
 const latestMonth = monthsFlat[monthsFlat.length-1];
 const prevMonth = monthsFlat.length>1 ? monthsFlat[monthsFlat.length-2] : null;
+
+// same calendar month across every year that has data (e.g. "September" in every year) —
+// used for the "this month vs past years" card
+const sameMonthAcrossYears = YEAR_LIST.map(y => {
+  const row = YEARS[y].m[latestMonth.monthIdx];
+  return row ? { year: y, yearShort: "'"+String(y).slice(2), credit: row[0], policies: row[1], commission: row[6], premium: row[3] } : null;
+}).filter(Boolean);
+const curSameMonth = sameMonthAcrossYears[sameMonthAcrossYears.length-1];
+const prevYearSameMonth = sameMonthAcrossYears.length>1 ? sameMonthAcrossYears[sameMonthAcrossYears.length-2] : null;
 
 /* ======================= UI ATOMS (fixed style, used for floating tooltip bubbles) ======================= */
 // Tooltips are small floating popups over the chart, so they keep one consistent dark-navy
@@ -464,12 +474,25 @@ function App() {
   }
 
   function Card({ children, style }) {
+    // double-click the title/top area to collapse or expand this box
+    const [collapsed, setCollapsed] = useState(false);
+    const arr = React.Children.toArray(children);
+    const header = arr[0];
+    const body = arr.slice(1);
     return (
       <div style={{
-        background: C.white, borderRadius: 22, padding: "18px 14px 8px",
+        position:"relative", background: C.white, borderRadius: 22, padding: "18px 14px 8px",
         boxShadow: darkMode ? "0 4px 18px rgba(0,0,0,0.35)" : "0 4px 18px rgba(11,59,99,0.08)", marginBottom: 20, ...style
       }}>
-        {children}
+        <div onDoubleClick={()=>setCollapsed(c=>!c)} style={{ cursor:"pointer", userSelect:"none" }} title="ดับเบิลคลิกเพื่อย่อ/ขยาย">
+          {header}
+        </div>
+        <div style={{ position:"absolute", top:16, right:16, fontSize:15, color:C.sub, pointerEvents:"none" }}>
+          {collapsed ? "▸" : "▾"}
+        </div>
+        {collapsed ? (
+          <div style={{ fontSize:16, color:C.sub, padding:"2px 0 14px" }}>(ดับเบิลคลิกที่หัวข้อเพื่อขยาย)</div>
+        ) : body}
       </div>
     );
   }
@@ -504,8 +527,9 @@ function App() {
   const monthlyChartData = useMemo(() => {
     const d = YEARS[selectedYear];
     return d.m.map((row,i) => {
-      if (!row) return { month: MONTHS[i], credit:null, policies:null, premium:null, commission:null, commOrd:null, commLbdu:null, aum:null, quota:d.quota };
+      if (!row) return { month: MONTHS[i], credit:null, policies:null, premium:null, commission:null, commOrd:null, commLbdu:null, direct:null, team30:null, directPct:null, team30Pct:null, aum:null, quota:d.quota };
       const hasBreakdown = row[9]!=null || row[10]!=null;
+      const creditTotal = (row[7]||0) + (row[8]||0);
       return {
         month: MONTHS[i],
         credit: row[0],
@@ -515,6 +539,10 @@ function App() {
         commOrd: hasBreakdown ? row[9] : row[6],   // fallback: if breakdown missing, show whole bar so the total still appears
         commLbdu: hasBreakdown ? row[10] : 0,
         hasBreakdown,
+        direct: row[7],
+        team30: row[8],
+        directPct: creditTotal>0 ? Math.round(row[7]/creditTotal*100) : 0,
+        team30Pct: creditTotal>0 ? Math.round(row[8]/creditTotal*100) : 0,
         aum: row[5],
         quota: d.quota,
       };
@@ -626,18 +654,20 @@ function App() {
 
       <div style={{ maxWidth: 760, margin:"-66px auto 0", padding:"0 14px", position:"relative", zIndex:3 }}>
 
-        {/* ===================== 0. THIS MONTH vs LAST MONTH (quick glance, kept at the very top) ===================== */}
-        {prevMonth && (
-          <Card style={{ borderTop:`4px solid ${C.blue}` }}>
-            <SectionTitle dot={C.blue} unit="บาท">เดือนนี้เทียบเดือนก่อน</SectionTitle>
-            <div style={{ fontSize:17, fontWeight:700, color:C.sub, marginBottom:10 }}>
-              {prevMonth.label} → {latestMonth.label}
-            </div>
-            <div key={latestMonth.label} className="anim-fade" style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
+        {/* ===================== 0. THIS MONTH vs SAME MONTH IN PAST YEARS (kept at the very top) ===================== */}
+        <Card style={{ borderTop:`4px solid ${C.blue}` }}>
+          <SectionTitle dot={C.blue} unit="บาท">ผลงานเดือน{MONTHS[latestMonth.monthIdx]}เทียบกับทุกปีที่ผ่านมา</SectionTitle>
+          <div style={{ fontSize:17, fontWeight:700, color:C.sub, marginBottom:10 }}>
+            เดือน{MONTHS[latestMonth.monthIdx]} ของทุกปีที่มีข้อมูล ({sameMonthAcrossYears.length} ปี) — ปีล่าสุด {curSameMonth.year}
+            {prevYearSameMonth && <> เทียบกับปี {prevYearSameMonth.year}</>}
+          </div>
+
+          {prevYearSameMonth && (
+            <div key={latestMonth.label} className="anim-fade" style={{ display:"flex", flexWrap:"wrap", gap:10, marginBottom:16 }}>
               {[
-                { label:"เครดิต", a:prevMonth.credit, b:latestMonth.credit },
-                { label:"ค่าตอบแทน", a:prevMonth.commission, b:latestMonth.commission },
-                { label:"กรมธรรม์ (ราย)", a:prevMonth.policies, b:latestMonth.policies, isCount:true },
+                { label:"เครดิต", a:prevYearSameMonth.credit, b:curSameMonth.credit },
+                { label:"ค่าตอบแทน", a:prevYearSameMonth.commission, b:curSameMonth.commission },
+                { label:"กรมธรรม์ (ราย)", a:prevYearSameMonth.policies, b:curSameMonth.policies, isCount:true },
               ].map((r,i) => {
                 const delta = r.b - r.a;
                 const up = delta > 0.0001, down = delta < -0.0001;
@@ -656,8 +686,25 @@ function App() {
                 );
               })}
             </div>
-          </Card>
-        )}
+          )}
+
+          <div style={{ fontSize:16, fontWeight:700, color:C.sub, marginBottom:4 }}>แนวโน้มเครดิตเดือน{MONTHS[latestMonth.monthIdx]} ย้อนหลังทุกปี</div>
+          <div style={{ width:"100%", height:220 }}>
+            <ResponsiveContainer>
+              <BarChart data={sameMonthAcrossYears.map(x=>({...x, year:x.yearShort}))} margin={{ top:6, right:8, left:-14, bottom:0 }}>
+                <CartesianGrid stroke={C.skyLight} vertical={false} />
+                <XAxis dataKey="year" tick={{ fontSize:14, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false} />
+                <YAxis tick={{ fontSize:14, fill:C.sub }} tickFormatter={fmtThousands} axisLine={false} tickLine={false} width={60} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="credit" name={`เครดิตเดือน${MONTHS[latestMonth.monthIdx]}`} radius={[8,8,0,0]} maxBarSize={28}>
+                  {sameMonthAcrossYears.map((x,i)=>(
+                    <Cell key={i} fill={x.year===curSameMonth.year ? C.blue : C.skyLight} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
 
         {/* ===================== 1. ALL-TIME TOTALS ===================== */}
         <Card>
@@ -692,7 +739,7 @@ function App() {
         {/* ===================== YEARLY TREND: CREDIT vs QUOTA (clickable) ===================== */}
         <Card>
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8, flexWrap:"wrap" }}>
-            <SectionTitle dot={C.blue} unit="บาท">เครดิตผลงานเทียบโควต้า รายปี — แตะแท่งเพื่อดูรายละเอียด</SectionTitle>
+            <SectionTitle dot={C.blue} unit="พันบาท">เครดิตผลงานเทียบโควต้า รายปี — แตะแท่งเพื่อดูรายละเอียด</SectionTitle>
           </div>
           <button onClick={()=>downloadChartAsImage(yearlyChartRef, "เครดิตผลงานรายปี.png")} style={{
             display:"flex", alignItems:"center", gap:6, marginBottom:10, padding:"7px 14px",
@@ -704,7 +751,7 @@ function App() {
               <ComposedChart data={yearlyData} margin={{ top:26, right:8, left:-14, bottom:0 }}>
                 <CartesianGrid stroke={C.skyLight} vertical={false} />
                 <XAxis dataKey="year" tick={{ fontSize:19, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false}/>
-                <YAxis tick={{ fontSize:16, fill:C.sub }} tickFormatter={fmtCompact} axisLine={false} tickLine={false} width={72}/>
+                <YAxis tick={{ fontSize:16, fill:C.sub }} tickFormatter={fmtThousands} axisLine={false} tickLine={false} width={72}/>
                 <Tooltip content={({active,payload,label})=>{
                   if(!active||!payload||!payload.length) return null;
                   const row = yearlyData.find(r=>r.year===label);
@@ -729,7 +776,7 @@ function App() {
                   <LabelList dataKey="team30Pct" position="center" formatter={(v)=> v>=8 ? v+"%" : ""}
                     style={{ fill:C.white, fontSize:17, fontWeight:800 }} />
                   <LabelList dataKey="credit" position="top" offset={8}
-                    formatter={(v)=> fmt(v)}
+                    formatter={(v)=> fmtThousands(v)}
                     style={{ fill:C.navy, fontSize:18.5, fontWeight:800 }} />
                 </Bar>
                 <Line type="stepAfter" dataKey="quotaTotal" name="โควต้ารวม" stroke={C.amber} strokeWidth={2.5} strokeDasharray="6 4" dot={{ r:3, fill:C.amber }} />
@@ -887,7 +934,7 @@ function App() {
 
         {/* ===================== MONTHLY METRIC EXPLORER ===================== */}
         <Card style={{ paddingBottom:18 }}>
-          <SectionTitle dot={C.navy} unit={metric==="policies" ? "ราย" : "บาท"}>สำรวจตัวชี้วัดรายเดือน — ปี {selectedYear}</SectionTitle>
+          <SectionTitle dot={C.navy} unit={metric==="policies" ? "ราย" : "พันบาท"}>สำรวจตัวชี้วัดรายเดือน — ปี {selectedYear}</SectionTitle>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
             {[
               ["credit","เครดิต", C.blue],
@@ -909,7 +956,7 @@ function App() {
               <ComposedChart data={monthlyChartData} margin={{ top:6, right:8, left:-14, bottom:0 }}>
                 <CartesianGrid stroke={C.skyLight} vertical={false} />
                 <XAxis dataKey="month" tick={{ fontSize:17, fill:C.sub, fontWeight:700 }} axisLine={{stroke:C.skyLight}} tickLine={false} interval={0}/>
-                <YAxis tick={{ fontSize:16, fill:C.sub }} tickFormatter={fmtCompact} axisLine={false} tickLine={false} width={70}/>
+                <YAxis tick={{ fontSize:16, fill:C.sub }} tickFormatter={metric==="policies" ? fmt : fmtThousands} axisLine={false} tickLine={false} width={70}/>
                 {metric==="commission" ? (
                   <Tooltip content={({active,payload,label})=>{
                     if(!active||!payload||!payload.length) return null;
@@ -930,21 +977,58 @@ function App() {
                       </div>
                     );
                   }} />
+                ) : metric==="credit" ? (
+                  <Tooltip content={({active,payload,label})=>{
+                    if(!active||!payload||!payload.length) return null;
+                    const row = monthlyChartData.find(r=>r.month===label);
+                    if(!row || row.direct==null) return null;
+                    return (
+                      <div style={{ background:LIGHT.navy, color:LIGHT.white, borderRadius:12, padding:"10px 14px", fontSize:19, fontWeight:700 }}>
+                        <div style={{ fontWeight:800, marginBottom:4, color:LIGHT.skyLight }}>{label} {selectedYear}</div>
+                        <div>เครดิตรวม: {fmt(row.credit)}</div>
+                        <div style={{ color:"#9FD3F0" }}>● ตัวแทนตรง: {fmt(row.direct)} ({row.directPct}%)</div>
+                        <div style={{ color:"#B7E8C7" }}>● ทีมงาน 30%: {fmt(row.team30)} ({row.team30Pct}%)</div>
+                      </div>
+                    );
+                  }} />
                 ) : (
                   <Tooltip content={<CustomTooltip />} />
                 )}
                 {metric==="credit" && <ReferenceLine y={yearSel.quota} stroke={C.amber} strokeDasharray="5 4" label={{ value:"โควต้า", fontSize:16, fill:C.amber, position:"insideTopRight" }} />}
                 {metric==="commission" && <Bar key="commOrd" dataKey="commOrd" name="สามัญ" stackId="c" fill={C.blue} radius={[0,0,0,0]} maxBarSize={30} />}
                 {metric==="commission" && <Bar key="commLbdu" dataKey="commLbdu" name="LBDU" stackId="c" fill={C.green} radius={[8,8,0,0]} maxBarSize={30} />}
-                {metric!=="commission" && <Bar key="single" dataKey={metric} name={metricLabel.split(" ")[0]} radius={[8,8,0,0]} maxBarSize={30}
-                  fill={metric==="credit"?C.blue:C.navy} />}
+                {metric==="credit" && (
+                  <Bar key="direct" dataKey="direct" name="ตัวแทนตรง" stackId="c" fill={C.blue} radius={[0,0,0,0]} maxBarSize={30}>
+                    <LabelList dataKey="directPct" position="center" formatter={(v)=> v>=10 ? v+"%" : ""} style={{ fill:C.white, fontSize:14, fontWeight:800 }} />
+                  </Bar>
+                )}
+                {metric==="credit" && (
+                  <Bar key="team30" dataKey="team30" name="ทีมงาน 30%" stackId="c" fill={C.green} radius={[8,8,0,0]} maxBarSize={30}>
+                    <LabelList dataKey="team30Pct" position="center" formatter={(v)=> v>=10 ? v+"%" : ""} style={{ fill:C.white, fontSize:14, fontWeight:800 }} />
+                  </Bar>
+                )}
+                {metric==="policies" && <Bar key="single" dataKey={metric} name={metricLabel.split(" ")[0]} radius={[8,8,0,0]} maxBarSize={30} fill={C.navy} />}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          {metric==="commission" && (
+          {(metric==="commission" || metric==="credit") && (
             <div style={{ display:"flex", gap:16, marginTop:8, fontSize:18.5, fontWeight:800 }}>
-              <span style={{ color:C.blue }}>■ สามัญ</span>
-              <span style={{ color:C.green }}>■ LBDU</span>
+              <span style={{ color:C.blue }}>■ {metric==="credit" ? "ตัวแทนตรง" : "สามัญ"}</span>
+              <span style={{ color:C.green }}>■ {metric==="credit" ? "ทีมงาน 30%" : "LBDU"}</span>
+            </div>
+          )}
+          {metric==="credit" && (
+            <div style={{
+              marginTop:14, background:C.skyPale, borderRadius:14, padding:"12px 16px",
+              border:`1.5px solid ${C.skyLight}`
+            }}>
+              <div style={{ fontSize:18, fontWeight:800, color:C.navy, marginBottom:8 }}>รายละเอียดสัดส่วนทั้งปี {selectedYear}</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
+                <KpiCard tone="blue" label="ตัวแทนตรง (ค่านายหน้า)" value={fmt(selSummary.direct)}
+                  sub={`${Math.round(selSummary.direct/(selSummary.direct+selSummary.team30)*100)}% ของเครดิตรวม`} />
+                <KpiCard tone="green" label="ทีมงาน (เครดิต 30%)" value={fmt(selSummary.team30)}
+                  sub={`${Math.round(selSummary.team30/(selSummary.direct+selSummary.team30)*100)}% ของเครดิตรวม`} />
+              </div>
             </div>
           )}
         </Card>
